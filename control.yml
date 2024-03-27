@@ -1,0 +1,55 @@
+---
+
+- hosts: server1
+  become: true
+  become_user: root
+  vars:
+    ca_dir: /etc/ssl
+
+
+  tasks:
+  - name: Install OpenSSL Package
+    apt:
+      name: openssl
+      state: latest
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Create CA directory
+    file:
+       path: "/etc/ssl"
+       state: directory
+       mode: "0700"
+
+  - name: Generate CA private key
+    openssl_privatekey:
+      path: "/etc/ssl/private/cakey.pem"
+      size: 4096
+      mode: "0700"
+    register: cakey
+  
+  - name: Generate CA certificate
+    openssl_csr:
+      path: "/etc/ssl/private/cacert.csr"
+      privatekey_path: "/etc/ssl/private/cakey.pem"
+      common_name: "My Root CA"
+      key_usage: keyCertSign
+    register: cacert
+
+  - name: Sign CA Certificate
+    openssl_certificate:
+      path: "/etc/ssl/ca.crt"
+      csr_path: "/etc/ssl/private/cacert.csr"
+      privatekey_path: "/etc/ssl/private/cakey.pem"
+      provider: selfsigned
+      subject_alt_name: "DNS:myrootca.com"
+    register: signed_cacert
+
+
+- hosts: server1
+  become: true
+  become_user: root
+  tasks: 
+    - name: Copy CA Certificate from Control node to Manage Node
+      run_once: yes
+      fetch: src=/etc/ssl/ca.crt dest=~/H0A9.1/ flat=yes
+      when: ansible_distribution == "Ubuntu"
